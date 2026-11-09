@@ -13,9 +13,6 @@ local function copy_table(t)
    for k,v in pairs(t) do c[k]=v end
    return c
 end
-local function indent(s)
-	 return "  " .. s:gsub("\n", "\n  ")
-end
 
 local function Assert(test, errmsg, level)
     if test then
@@ -76,6 +73,8 @@ do --array & dictionary
       return getmetatable(obj) == metatable_pdfe_triplet
    end
 
+   local insert, concat = table.insert, table.concat
+
    --The situations for array and dictionary are very similar, so we define
    --parametrized metamethods.
 
@@ -135,11 +134,14 @@ do --array & dictionary
 	    __len = function() return #tbl end,
 	    __call = identity,
 		 __tostring = function(obj)
-			  s = '[\n'
+        local s = {'[\n'}
 			  for _, child in pairs(obj) do
-					s = s .. indent(tostring(child)) .. "\n"
+          insert(s, "  ")
+          insert(s, (tostring(child):gsub("\n", "\n  ")))
+          insert(s, "\n")
 			  end
-			  return s .. ']'
+        insert(s, ']')
+			  return concat(s, "")
 		 end,
 	 }
       )
@@ -166,13 +168,20 @@ do --array & dictionary
 	       return mt_pairs(tbl,pdfe_doc,indirect_root,pairs) end,
 	    __call = identity,
 		 __tostring = function(obj)
-                          s = tostring(obj.Type) .. ' <<\n'
+        -- In the original version, s was not local, but I think it should be?
+        local s = {tostring(obj.Type), ' <<\n'}
+        local insert = table.insert
 			  for key, child in pairs(obj) do
 					if key ~= 'Type' then
-						 s = s .. indent("/" .. tostring(key) .. " = " .. tostring(child)) .. "\n"
+             insert(s, "  /")
+             insert(s, (tostring(key):gsub("\n", "\n  ")))
+             insert(s, " = ")
+             insert(s, (tostring(child):gsub("\n", "\n  ")))
+             insert(s, "\n")
 					end
 			  end
-			  return s .. '>>'
+        insert(s, ">>")
+			  return concat(s, "")
 		 end
 	 }
       )
@@ -454,7 +463,7 @@ do --linearize
 	 local child_reprs = { [0] = '<<' }
 	 local i = 1
 	 for key, child_obj in pairs(obj) do
-	    child_reprs[i] = '/' .. key .. ' ' .. pdfw.linearize(doc, child_obj)
+	    child_reprs[i] = table.concat({'/', key, ' ', pdfw.linearize(doc, child_obj)}, "")
 	    i = i + 1
 	 end
 	 child_reprs[i] = '>>'
@@ -580,7 +589,7 @@ function pdfw_doc.save(doc, filename)
    doc.xref = {}
    doc.fh = Assert(io.open(filename, 'wb'), ('Cannot save %s'):format(filename))
 
-   doc.fh:write(string.format("%%PDF-%d.%d\n", doc.major, doc.minor))
+   doc.fh:write(table.concat({"%PDF-", doc.major, ".", doc.minor, "\n"}, ""))
 
    local magic_bin = 'LuaPDFrw'
    magic_bin = {magic_bin:byte(1,-1)}
